@@ -3,9 +3,9 @@
 ## Render web service
 - Build: `pip install -r requirements.txt`
 - Start: `gunicorn app:app --bind 0.0.0.0:$PORT`
-- Environment variables: `API_KEY` (private), `DASHBOARD_PASSWORD` (private), `FLASK_SECRET_KEY` (long random secret), optional `OWNER_NAME=CHINNU TEAM`.
+- Environment variables: `API_KEY` (private), `DASHBOARD_PASSWORD` (private), `FLASK_SECRET_KEY` (long random secret), optional `OWNER_NAME=CHINNU TEAM`, and optional `UPSTREAM_API_URL=https://like-api-3-vng3.onrender.com`.
 
-Open `/dashboard` and log in with `DASHBOARD_PASSWORD`. Dashboard includes today's API request count, reported successful/failed jobs, confirmed likes gained, unique limit-hit accounts, region breakdown, UID history, token-file status, and recent requests/jobs. Anime-inspired background and Dark/Light/Neon/Ocean themes are included.
+Open `/dashboard` and log in with `DASHBOARD_PASSWORD`. Dashboard includes today's API request count, reported successful/failed jobs, confirmed likes gained, unique limit-hit accounts, region breakdown, UID history, token-file status, and recent requests/jobs. Anime-inspired background and Dark/Light/Neon/Ocean themes are included. The dashboard auto-refreshes every 30 seconds and pings the configured upstream base URL without sending JWT tokens or API keys; it shows reachability, HTTP status, and latency. A 4xx response means the host responded (reachable), while a 5xx or connection timeout is shown as an issue.
 
 ## IDs list
 Edit `ids.json` to list UIDs to track. Example:
