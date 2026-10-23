@@ -21,7 +21,7 @@ import uid_generator_pb2
 
 app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent
-API_KEY = os.getenv("API_KEY", "").strip()
+API_KEY = os.getenv("API_KEY", "CHINNU").strip()
 OWNER = os.getenv("OWNER_NAME", "CHINNU TEAM")
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip()
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or os.urandom(32)
