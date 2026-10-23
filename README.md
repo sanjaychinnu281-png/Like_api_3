@@ -41,3 +41,7 @@ Allowed statuses: `success`, `fail`, `limit_reached`. Likes gained are only coun
 
 ## Persistence note
 SQLite database `monitor.db` is local to the service. Depending on Render disk configuration, data may be lost on restart/redeploy. Use a persistent disk or managed database if long-term history is required.
+
+
+### Anime Rasengan effects
+The login and dashboard include a looping CSS chakra orb with rotating energy rings and spark particles. Tap **Play Rasengan Sound** / **Play Rasengan FX** to hear a synthesized swoosh/chakra effect. Browsers require a user tap before playing sound; no external audio file is required.
