@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.env
+token_ind.json
+token_bd.json
+token_br.json
+keys.json
