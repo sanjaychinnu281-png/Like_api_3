@@ -4,11 +4,14 @@ import os
 import json
 import binascii
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
+import sqlite3
+import time
+from functools import wraps
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 from google.protobuf.json_format import MessageToDict
@@ -18,9 +21,71 @@ import uid_generator_pb2
 
 app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent
-API_KEY = os.getenv("API_KEY", "CHINNU").strip()
+API_KEY = os.getenv("API_KEY", "").strip()
 OWNER = os.getenv("OWNER_NAME", "CHINNU TEAM")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip()
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or os.urandom(32)
+DB_PATH = Path(os.getenv("MONITOR_DB_PATH", str(BASE_DIR / "monitor.db")))
 TIMEOUT = 15
+
+
+def init_monitor_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            method TEXT NOT NULL,
+            path TEXT NOT NULL,
+            status INTEGER NOT NULL,
+            duration_ms REAL NOT NULL
+        )""")
+        conn.commit()
+
+
+init_monitor_db()
+
+
+@app.before_request
+def start_request_timer():
+    request._started_at = time.perf_counter()
+
+
+@app.after_request
+def record_request(response):
+    # Never store query strings, API keys, Authorization headers, or request bodies.
+    if request.path not in {"/dashboard", "/dashboard/login", "/dashboard/logout"}:
+        elapsed = (time.perf_counter() - getattr(request, "_started_at", time.perf_counter())) * 1000
+        try:
+            with sqlite3.connect(DB_PATH, timeout=3) as conn:
+                conn.execute(
+                    "INSERT INTO requests(timestamp, method, path, status, duration_ms) VALUES (?, ?, ?, ?, ?)",
+                    (datetime.now(timezone.utc).isoformat(timespec="seconds"), request.method, request.path[:120], response.status_code, round(elapsed, 2)),
+                )
+                conn.commit()
+        except sqlite3.Error:
+            app.logger.exception("Could not save monitoring event")
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
+def dashboard_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get("dashboard_logged_in"):
+            return redirect(url_for("dashboard_login"))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+DASHBOARD_HTML = r"""<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1"><title>CHINNU API Monitor</title>
+<style>body{font-family:system-ui,Arial;margin:0;background:#0b1220;color:#e5e7eb}main{max-width:1050px;margin:auto;padding:20px}.muted{color:#9ca3af}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}.card{background:#151f32;border:1px solid #273449;border-radius:14px;padding:16px}.num{font-size:28px;font-weight:700}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px;border-bottom:1px solid #293449;word-break:break-word}.tablewrap{overflow:auto;background:#151f32;border-radius:12px}a,button{color:#fff;background:#2563eb;padding:9px 12px;border:0;border-radius:8px;text-decoration:none}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}</style></head><body><main>
+<header><div><h1>📡 CHINNU API Monitor</h1><p class=muted>Request activity · refresh the page to update</p></div><a href="/dashboard/logout">Log out</a></header>
+<div class=cards><div class=card><div class=muted>Total logged requests</div><div class=num>{{ total }}</div></div><div class=card><div class=muted>Successful (2xx)</div><div class=num>{{ success }}</div></div><div class=card><div class=muted>Errors (4xx/5xx)</div><div class=num>{{ errors }}</div></div><div class=card><div class=muted>Average response</div><div class=num>{{ avg }} ms</div></div></div>
+<h2>Recent requests</h2><p class=muted>API keys, query values, tokens and request bodies are not stored here.</p><div class=tablewrap><table><thead><tr><th>Time (UTC)</th><th>Method</th><th>Endpoint</th><th>Status</th><th>Time</th></tr></thead><tbody>{% for r in rows %}<tr><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td>{{ r[3] }}</td><td>{{ r[4] }}</td><td>{{ r[5] }} ms</td></tr>{% else %}<tr><td colspan=5>No requests logged yet.</td></tr>{% endfor %}</tbody></table></div>
+<p class=muted>Monitor database is local to this Render instance. On free instances, data may reset or disappear after redeploy/restart. Use a persistent disk or external database for durable logs.</p></main></body></html>"""
+
+LOGIN_HTML = """<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1"><title>CHINNU Monitor Login</title><style>body{font-family:system-ui;background:#0b1220;color:#e5e7eb;display:grid;place-items:center;min-height:100vh;margin:0}.box{width:min(340px,85vw);background:#151f32;padding:24px;border-radius:16px}input,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0;border-radius:8px;border:1px solid #334155}button{background:#2563eb;color:white;border:0}</style></head><body><form class=box method=post><h2>CHINNU Monitor</h2><p>Enter dashboard password.</p>{% if error %}<p style=color:#fca5a5>{{ error }}</p>{% endif %}<input type=password name=password required placeholder="Dashboard password"><button>Login</button></form></body></html>"""
 
 # Match the protocol constants used by the supplied project. Do not expose credentials in source code.
 AES_KEY = b'Yg&tc%DEuh6%Zc^8'
@@ -112,13 +177,47 @@ def fetch_player(uid: int, region: str) -> dict:
     }
 
 
+@app.route("/dashboard/login", methods=["GET", "POST"])
+def dashboard_login():
+    if not DASHBOARD_PASSWORD:
+        return error("Monitoring dashboard is not configured. Set DASHBOARD_PASSWORD in Render environment variables.", 503)
+    message = None
+    if request.method == "POST":
+        supplied = request.form.get("password", "")
+        import hmac
+        if hmac.compare_digest(supplied, DASHBOARD_PASSWORD):
+            session.clear()
+            session["dashboard_logged_in"] = True
+            return redirect(url_for("dashboard"))
+        message = "Incorrect password."
+    return render_template_string(LOGIN_HTML, error=message)
+
+
+@app.get("/dashboard/logout")
+def dashboard_logout():
+    session.clear()
+    return redirect(url_for("dashboard_login"))
+
+
+@app.get("/dashboard")
+@dashboard_required
+def dashboard():
+    with sqlite3.connect(DB_PATH, timeout=3) as conn:
+        total = conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0]
+        success = conn.execute("SELECT COUNT(*) FROM requests WHERE status >= 200 AND status < 300").fetchone()[0]
+        errors = conn.execute("SELECT COUNT(*) FROM requests WHERE status >= 400").fetchone()[0]
+        avg = conn.execute("SELECT COALESCE(ROUND(AVG(duration_ms), 2), 0) FROM requests").fetchone()[0]
+        rows = conn.execute("SELECT id, timestamp, method, path, status, duration_ms FROM requests ORDER BY id DESC LIMIT 100").fetchall()
+    return render_template_string(DASHBOARD_HTML, total=total, success=success, errors=errors, avg=avg, rows=rows)
+
+
 @app.get("/")
 def home():
     return jsonify({
         "name": OWNER,
         "ok": True,
         "message": "Free Fire player API is running.",
-        "endpoints": ["/health", "/player-info?uid=PLAYER_UID&server_name=IND&key=YOUR_API_KEY", "/like?uid=PLAYER_UID&server_name=IND&key=YOUR_API_KEY"],
+        "endpoints": ["/health", "/player-info?uid=PLAYER_UID&server_name=IND&key=YOUR_API_KEY", "/like?uid=PLAYER_UID&server_name=IND&key=YOUR_API_KEY", "/dashboard"],
         "note": "The /like endpoint reports current likes only; it does not automate or send likes."
     })
 
