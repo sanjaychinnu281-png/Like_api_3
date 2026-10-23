@@ -1,37 +1,43 @@
-# CHINNU FF API + Monitor + Telegram client
+# CHINNU FF API — Anime dashboard + job monitoring
 
-## Render API Web Service
-- Runtime: Python
-- Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn app:app --bind 0.0.0.0:$PORT`
-- Environment variables:
-  - `API_KEY`: long random private API key used by clients
-  - `OWNER_NAME`: `CHINNU TEAM` (optional)
-  - `DASHBOARD_PASSWORD`: a separate strong password for `/dashboard`
-  - `FLASK_SECRET_KEY`: a long random secret for dashboard sessions
-- Add your own authorized region token JSON files privately to the service/repository. Do not put token files in a public repository. Rotate tokens that were accidentally exposed.
+## Render web service
+- Build: `pip install -r requirements.txt`
+- Start: `gunicorn app:app --bind 0.0.0.0:$PORT`
+- Environment variables: `API_KEY` (private), `DASHBOARD_PASSWORD` (private), `FLASK_SECRET_KEY` (long random secret), optional `OWNER_NAME=CHINNU TEAM`.
 
-## Monitoring
-Open `https://YOUR-RENDER-SERVICE.onrender.com/dashboard` and log in with `DASHBOARD_PASSWORD`.
-The dashboard records timestamp, HTTP method, endpoint path, status code and response time. It deliberately does not record query strings, API keys, request bodies, or Authorization headers.
+Open `/dashboard` and log in with `DASHBOARD_PASSWORD`. Dashboard includes today's API request count, reported successful/failed jobs, confirmed likes gained, unique limit-hit accounts, region breakdown, UID history, token-file status, and recent requests/jobs. Anime-inspired background and Dark/Light/Neon/Ocean themes are included.
 
-SQLite monitoring data is local to the instance and can be lost on redeploy/restart depending on Render service/storage setup. For durable logs, configure a persistent disk or external database.
+## IDs list
+Edit `ids.json` to list UIDs to track. Example:
+```json
+{
+  "ids": [
+    {"uid": "1234567890", "region": "IND", "nickname": "Optional nickname"},
+    {"uid": "2345678901", "region": "BD", "nickname": "Optional nickname"}
+  ]
+}
+```
+The example UID is a placeholder; replace it. IDs in this file appear as `waiting` until job results are recorded.
 
-## Telegram bot client
-`tg_bot_example.py` is a separate optional Telegram bot client. Run it as a separate Render Background Worker or another always-on Python service (not as the web service's Start Command). Set these environment variables on that separate service:
-- `BOT_TOKEN`: Telegram bot token
-- `API_BASE_URL`: full URL of the deployed API, e.g. `https://your-service.onrender.com`
-- `API_KEY`: same private API key configured on API service
-- `ALLOWED_TELEGRAM_IDS`: optional comma-separated Telegram numeric user IDs allowed to use it
+## Token files
+`token_ind.json`, `token_bd.json`, and `token_br.json` are empty templates. Add only your own authorized tokens privately. Expected format is a JSON list with objects containing `jwt_token` or `token`. **Never commit real tokens to a public GitHub repo.** Do not share token values or put them in screenshots. The dashboard only reports whether a token file has entries; it never displays tokens. A valid token is required for player lookups. Region support depends on the upstream service and valid authorized tokens.
 
-For the worker, build command: `pip install -r requirements.txt`; start command: `python tg_bot_example.py`.
+## Recording actual job outcomes
+This project does **not** send or automate likes. The current `/like` endpoint is read-only and reports the player's current likes count. To populate job-specific metrics, an existing authorized upstream integration must POST each real result to `/monitor/event` using header `X-API-Key: YOUR_API_KEY` and JSON like:
+```json
+{
+  "job_id": "job-001",
+  "uid": "1234567890",
+  "nickname": "Example",
+  "region": "IND",
+  "status": "success",
+  "likes_before": 100,
+  "likes_after": 105,
+  "likes_given": 5,
+  "message": "Confirmed by upstream service"
+}
+```
+Allowed statuses: `success`, `fail`, `limit_reached`. Likes gained are only counted for success events and are capped at the observed `likes_after - likes_before` delta. Never send fake results; dashboard values reflect reported events. Requests to `/monitor/event` require the API key and must be made over HTTPS.
 
-Commands: `/start`, `/player UID [REGION]`.
-
-## Endpoints
-- `GET /health` - health check
-- `GET /player-info?uid=...&server_name=IND` - player info; API key can be sent as `X-API-Key` header
-- `GET /like?uid=...&server_name=IND` - current likes count only; does not send likes
-- `GET /dashboard` - password-protected monitoring dashboard
-
-This project does not automate or send likes. Region availability depends on valid authorized tokens and the upstream service.
+## Persistence note
+SQLite database `monitor.db` is local to the service. Depending on Render disk configuration, data may be lost on restart/redeploy. Use a persistent disk or managed database if long-term history is required.
