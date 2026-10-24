@@ -1,6 +1,6 @@
-Flask>=3.0,<4.0
-requests>=2.31,<3.0
-pycryptodome>=3.20,<4.0
-protobuf>=4.25,<6.0
-psycopg2-binary>=2.9.9
-SQLAlchemy>=2.0.0
+Flask
+requests
+pycryptodome
+protobuf
+psycopg2-binary
+SQLAlchemy
