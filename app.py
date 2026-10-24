@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import sqlite3
 import time
+import base64
 from functools import wraps
 from zoneinfo import ZoneInfo
 
@@ -26,7 +27,7 @@ OWNER = os.getenv("OWNER_NAME", "CHINNU TEAM")
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip()
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or os.urandom(32)
 DB_PATH = Path(os.getenv("MONITOR_DB_PATH", str(BASE_DIR / "monitor.db")))
-TIMEOUT = 15
+TIMEOUT = int(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "30"))
 UPSTREAM_API_URL = os.getenv("UPSTREAM_API_URL", "https://like-api-3-vng3.onrender.com").strip().rstrip("/")
 UPSTREAM_PING_TIMEOUT = 6
 
@@ -81,7 +82,6 @@ def start_request_timer():
 
 @app.after_request
 def record_request(response):
-    # Never store query strings, API keys, Authorization headers, or request bodies.
     if request.path not in {"/dashboard", "/dashboard/login", "/dashboard/logout", "/dashboard/data"}:
         elapsed = (time.perf_counter() - getattr(request, "_started_at", time.perf_counter())) * 1000
         try:
@@ -208,7 +208,7 @@ LOGIN_HTML = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><met
 <g class="blink-lids" aria-hidden="true"><path d="M234 322Q263 296 295 322Q266 350 234 322Z" fill="url(#nSkin)" stroke="#b77955" stroke-width="3"/><path d="M326 322Q357 296 386 322Q355 350 326 322Z" fill="url(#nSkin)" stroke="#b77955" stroke-width="3"/></g>
 </svg><div class="rasengan-scene" aria-hidden="true"><div class="rasengan-ring r2"></div><div class="rasengan-ring"></div><div class="rasengan-ring r3"></div><div class="rasengan-core"></div><i class="rasengan-spark s1"></i><i class="rasengan-spark s2"></i><i class="rasengan-spark s3"></i></div></div><form class="box" method="post"><div class="logo" aria-label="CL animated logo"><span>CL</span></div><h1>CHINNU Monitor</h1><span class="tag">PRIVATE CONTROL CENTER</span><p>Sign in to view API activity and monitoring.</p>{% if error %}<p class="error">{{ error }}</p>{% endif %}<input type="password" name="password" required autocomplete="current-password" placeholder="Dashboard password"><button type="submit">Unlock Dashboard →</button><button type="button" class="sound-btn" id="loginRasenganSound">⚡ Play Rasengan Sound</button><button type="button" class="sound-btn" id="loginAmbientMusic">🎵 Play Anime Music</button></form><script>let loginMusicCtx=null,loginMusicMaster=null,loginMusicTimer=null,loginMusicStep=0,loginMusicPlaying=false;function toggleLoginMusic(){const b=document.getElementById('loginAmbientMusic');try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(loginMusicPlaying){loginMusicPlaying=false;if(loginMusicTimer)clearInterval(loginMusicTimer);loginMusicTimer=null;if(loginMusicMaster&&loginMusicCtx){loginMusicMaster.gain.setTargetAtTime(.0001,loginMusicCtx.currentTime,.08);setTimeout(()=>{try{loginMusicCtx.close()}catch(e){}loginMusicCtx=null;loginMusicMaster=null},450)}b.textContent='🎵 Play Anime Music';return}loginMusicCtx=new AC();loginMusicCtx.resume();loginMusicMaster=loginMusicCtx.createGain();loginMusicMaster.gain.value=.0001;loginMusicMaster.connect(loginMusicCtx.destination);loginMusicMaster.gain.setTargetAtTime(.2,loginMusicCtx.currentTime,.45);[130.81,196,261.63].forEach((hz,i)=>{const o=loginMusicCtx.createOscillator(),g=loginMusicCtx.createGain();o.type=i?'sine':'triangle';o.frequency.value=hz;g.gain.value=i?.09:.16;o.connect(g);g.connect(loginMusicMaster);o.start()});loginMusicPlaying=true;const notes=[392,440,523.25,587.33,523.25,440,349.23,392,440,523.25,659.25,587.33,523.25,440,392,329.63];const play=()=>{if(!loginMusicPlaying)return;const t=loginMusicCtx.currentTime,o=loginMusicCtx.createOscillator(),g=loginMusicCtx.createGain();o.type='sine';o.frequency.value=notes[loginMusicStep++%notes.length];g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.17,t+.06);g.gain.exponentialRampToValueAtTime(.0001,t+.62);o.connect(g);g.connect(loginMusicMaster);o.start(t);o.stop(t+.65)};play();loginMusicTimer=setInterval(play,520);b.textContent='⏸ Pause Anime Music'}catch(e){console.warn(e)}}document.getElementById('loginAmbientMusic').addEventListener('click',toggleLoginMusic);let loginAudio=null;function playLoginRasengan(){try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;loginAudio=loginAudio||new AC();if(loginAudio.state==='suspended')loginAudio.resume();const c=loginAudio,t=c.currentTime,m=c.createGain();m.gain.setValueAtTime(.0001,t);m.gain.exponentialRampToValueAtTime(.16,t+.06);m.gain.exponentialRampToValueAtTime(.0001,t+1.25);m.connect(c.destination);const o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(130,t);o.frequency.exponentialRampToValueAtTime(620,t+.32);o.frequency.exponentialRampToValueAtTime(95,t+1.15);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.28,t+.1);g.gain.exponentialRampToValueAtTime(.0001,t+1.2);o.connect(g);g.connect(m);o.start(t);o.stop(t+1.26);const len=Math.floor(c.sampleRate*.9),b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);const n=c.createBufferSource(),f=c.createBiquadFilter(),ng=c.createGain();n.buffer=b;f.type='bandpass';f.frequency.setValueAtTime(450,t);f.frequency.exponentialRampToValueAtTime(2400,t+.28);f.frequency.exponentialRampToValueAtTime(250,t+.85);ng.gain.setValueAtTime(.0001,t);ng.gain.exponentialRampToValueAtTime(.24,t+.08);ng.gain.exponentialRampToValueAtTime(.0001,t+.88);n.connect(f);f.connect(ng);ng.connect(m);n.start(t);n.stop(t+.9);const btn=document.getElementById('loginRasenganSound');btn.textContent='🌀 Rasengan!';setTimeout(()=>{if(btn.isConnected)btn.textContent='⚡ Play Rasengan Sound'},1400)}catch(e){console.warn(e)}}document.getElementById('loginRasenganSound').addEventListener('click',playLoginRasengan);</script></body></html>"""
 
-# Match the protocol constants used by the supplied project. Do not expose credentials in source code.
+# Match the protocol constants used by the supplied project.
 AES_KEY = b'Yg&tc%DEuh6%Zc^8'
 AES_IV = b'6oyZDr22E3ychjM%'
 REGION_FILE = {
@@ -221,12 +221,13 @@ REGION_FILE = {
 }
 REGION_URL = {
     "IND": "https://client.ind.freefiremobile.com/GetPlayerPersonalShow",
-    "BR": "https://client.us.freefiremobile.com/GetPlayerPersonalShow",
-    "US": "https://client.us.freefiremobile.com/GetPlayerPersonalShow",
+    "BD":  "https://client.ind.freefiremobile.com/GetPlayerPersonalShow",  # BD -> IND host
+    "BR":  "https://client.us.freefiremobile.com/GetPlayerPersonalShow",
+    "US":  "https://client.us.freefiremobile.com/GetPlayerPersonalShow",
     "SAC": "https://client.us.freefiremobile.com/GetPlayerPersonalShow",
-    "NA": "https://client.us.freefiremobile.com/GetPlayerPersonalShow",
+    "NA":  "https://client.us.freefiremobile.com/GetPlayerPersonalShow",
 }
-DEFAULT_URL = "https://clientbp.ggpolarbear.com/GetPlayerPersonalShow"
+# कोई DEFAULT_URL fallback नहीं। अगर region unknown होगा, तो सीधे साफ़ error देगा।
 
 
 def error(message, status):
@@ -261,7 +262,6 @@ def load_token(region: str) -> str:
         data = json.load(f)
     if not isinstance(data, list) or not data:
         raise ValueError(f"{filename} must contain a non-empty JSON list.")
-    # The uploaded files use jwt_token; the original app incorrectly expected token.
     token = data[0].get("jwt_token") or data[0].get("token")
     if not token:
         raise ValueError(f"No jwt_token/token field found in {filename}.")
@@ -270,7 +270,10 @@ def load_token(region: str) -> str:
 
 def fetch_player(uid: int, region: str) -> dict:
     token = load_token(region)
-    url = REGION_URL.get(region, DEFAULT_URL)
+    url = REGION_URL.get(region)
+    if not url:
+        raise ValueError(f"Unsupported region '{region}'. Use IND, BD, BR, US, SAC, or NA.")
+    
     headers = {
         "User-Agent": "Dalvik/2.1.0 (Linux; Android 9)",
         "Connection": "Keep-Alive",
@@ -280,9 +283,29 @@ def fetch_player(uid: int, region: str) -> dict:
         "X-Unity-Version": "2018.4.11f1",
         "ReleaseVersion": "OB55",
     }
-    response = requests.post(url, data=bytes.fromhex(encrypted_uid(uid)), headers=headers, timeout=TIMEOUT)
+    
+    last_exc = None
+    for attempt in range(2):  # 1 retry on network/timeout
+        try:
+            response = requests.post(
+                url, 
+                data=bytes.fromhex(encrypted_uid(uid)), 
+                headers=headers, 
+                timeout=TIMEOUT
+            )
+            break
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last_exc = exc
+            if attempt == 0:
+                time.sleep(1.5)
+                continue
+            raise
+    else:
+        raise last_exc
+
     if response.status_code != 200:
         raise RuntimeError(f"Upstream game service returned HTTP {response.status_code}.")
+        
     info = like_count_pb2.Info()
     info.ParseFromString(response.content)
     data = MessageToDict(info, preserving_proto_field_name=False)
@@ -492,26 +515,105 @@ def health():
     return jsonify({"ok": True, "service": OWNER, "time_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z"})
 
 
+@app.get("/debug/token-status")
+def debug_token_status():
+    """Read-only diagnostic. Never returns token values, only shape and freshness."""
+    if not authorized():
+        return error("Invalid or missing API key.", 403)
+    out = {}
+    for region, filename in [("IND", "token_ind.json"), ("BD", "token_bd.json"), ("BR", "token_br.json")]:
+        path = BASE_DIR / filename
+        info = {"file": filename, "exists": path.is_file(), "entries": 0,
+                "usable": 0, "expired": 0, "invalid": 0, "age_hours_max": None}
+        if path.is_file():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    info["entries"] = len(data)
+                    ages = []
+                    for entry in data:
+                        if not isinstance(entry, dict):
+                            info["invalid"] += 1
+                            continue
+                        tok = entry.get("jwt_token") or entry.get("token")
+                        if not tok or not isinstance(tok, str):
+                            info["invalid"] += 1
+                            continue
+                        parts = tok.split(".")
+                        if len(parts) != 3:
+                            info["invalid"] += 1
+                            continue
+                        try:
+                            payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+                            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+                            exp = payload.get("exp")
+                            iat = payload.get("iat")
+                            now_ts = int(time.time())
+                            if exp and exp < now_ts:
+                                info["expired"] += 1
+                                continue
+                            if iat:
+                                ages.append((now_ts - iat) / 3600)
+                            info["usable"] += 1
+                        except Exception:
+                            info["invalid"] += 1
+                    if ages:
+                        info["age_hours_max"] = round(max(ages), 1)
+            except (OSError, json.JSONDecodeError) as exc:
+                info["read_error"] = type(exc).__name__
+        out[region] = info
+    return jsonify({"ok": True, "regions": out,
+                    "now_utc": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+
+
 def query_player():
     if not authorized():
-        return None, error("Invalid or missing API key.", 403)
+        return None, error("Invalid or missing API key. Add &key=YOUR_API_KEY to the URL.", 403)
+
     uid_text = request.args.get("uid", "").strip()
     region = request.args.get("server_name", "IND").strip().upper()
+
     if not uid_text.isdigit() or int(uid_text) <= 0:
         return None, error("uid must be a positive numeric player UID.", 400)
+
+    if region not in REGION_URL:
+        return None, error(f"Unsupported region '{region}'. Use IND, BD, BR, US, SAC, or NA.", 400)
+
     try:
         return fetch_player(int(uid_text), region), None
-    except ValueError as exc:
-        return None, error(str(exc), 400)
+
     except FileNotFoundError as exc:
-        return None, error(str(exc), 503)
-    except LookupError as exc:
-        return None, error(str(exc), 404)
+        return None, error(f"Token file missing: {exc}. Upload token_{region.lower()}.json to Render.", 503)
+
+    except ValueError as exc:
+        msg = str(exc)
+        if "non-empty JSON list" in msg or "No jwt_token" in msg:
+            return None, error(f"{msg} — token file must be a JSON list like [{{\"jwt_token\": \"eyJ...\"}}] with at least one valid entry.", 400)
+        return None, error(msg, 400)
+
+    except requests.Timeout:
+        return None, error(f"Upstream game server timed out after {TIMEOUT}s (region {region}). Try again.", 504)
+
+    except requests.ConnectionError:
+        return None, error(f"Could not connect to Free Fire {region} server. Upstream may be blocked or down.", 502)
+
     except requests.RequestException:
-        return None, error("Could not connect to the upstream service. Try again later.", 502)
+        return None, error("Upstream network error. Try again later.", 502)
+
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "401" in msg or "403" in msg:
+            return None, error(f"Token rejected by upstream (HTTP 401/403). Your JWT in token_{region.lower()}.json is expired — generate a fresh one.", 401)
+        if "429" in msg:
+            return None, error("Upstream rate-limited (HTTP 429). Wait a few minutes and retry.", 429)
+        return None, error(msg, 502)
+
+    except LookupError as exc:
+        return None, error(f"{exc} — UID {uid_text} not found in region {region}. Check the UID or try a different region.", 404)
+
     except Exception as exc:
-        app.logger.exception("Player lookup failed")
-        return None, error("Player lookup failed. Check Render logs and token validity.", 502)
+        app.logger.exception("Player lookup failed — uid=%s region=%s", uid_text, region)
+        return None, error(f"Unexpected error: {type(exc).__name__}: {exc}", 500)
 
 
 @app.get("/player-info")
